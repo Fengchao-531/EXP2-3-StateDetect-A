@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>本地环境信息表单示例</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f7f7fb;color:#111;padding:24px}
+  .box{max-width:540px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:10px;box-shadow:0 6px 20px rgba(13,38,76,.06);padding:18px}
+  label{display:block;margin:10px 0 6px;font-weight:600}
+  select{width:100%;padding:10px;border:1px solid #d7dbe6;border-radius:6px;box-sizing:border-box}
+  button{background:#1466f1;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:600;margin-top:12px;cursor:pointer}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th,td{border:1px solid #eee;padding:8px;text-align:left;font-size:.95rem}
+  .panel{margin-top:14px;padding:10px;border:1px dashed #ddd;border-radius:8px;background:#fafafa}
+</style>
+</head>
+<body>
+<div class="box">
+  <form id="f" onsubmit="return false;">
+    <label for="gender">性别</label>
+    <select id="gender" name="gender" autocomplete="off">
+      <option value="">（请选择）</option>
+      <option>Male</option>
+      <option>Female</option>
+      <option>Other</option>
+      <option>Prefer not to say</option>
+    </select>
+    <button id="submitBtn" type="button">提交</button>
+  </form>
+
+  <!-- 提交后反馈 -->
+  <div id="resultPanel" class="panel" style="display:none">
+    <h3>提交结果</h3>
+    <table>
+      <tbody>
+        <tr><th>gender</th><td id="r_gender"></td></tr>
+        <tr><th>提交时间</th><td id="r_time"></td></tr>
+        <tr><th>时区</th><td id="r_tz"></td></tr>
+        <tr><th>浏览器</th><td id="r_ua"></td></tr>
+        <tr><th>当前页面URL</th><td id="r_url"></td></tr>
+        <tr><th>屏幕大小</th><td id="r_screen"></td></tr>
+        <tr><th>浏览器窗口</th><td id="r_window"></td></tr>
+        <tr><th>语言</th><td id="r_lang"></td></tr>
+        <tr><th>网络状态</th><td id="r_net"></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  $('submitBtn').addEventListener('click', ()=>{
+    const gender = $('gender').value;
+    if(!gender){ alert('请选择性别'); return; }
+
+    // 收集信息
+    const now = new Date();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const ua = navigator.userAgent;
+    const url = window.location.href;
+    const scr = screen.width + " x " + screen.height;
+    const win = window.innerWidth + " x " + window.innerHeight;
+    const lang = navigator.language;
+    const net = navigator.onLine ? "在线" : "离线";
+
+    // 渲染结果
+    $('r_gender').textContent = gender;
+    $('r_time').textContent = now.toLocaleString();
+    $('r_tz').textContent = tz;
+    $('r_ua').textContent = ua;
+    $('r_url').textContent = url;
+    $('r_screen').textContent = scr;
+    $('r_window').textContent = win;
+    $('r_lang').textContent = lang;
+    $('r_net').textContent = net;
+
+    $('resultPanel').style.display = "block";
+  });
+</script>
+</body>
+</html>
