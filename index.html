@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>OTP 流程</title>
+<title>OTP Flow</title>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f7f7fb;color:#111;padding:18px}
   .box{max-width:880px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;box-shadow:0 6px 20px rgba(13,38,76,.06);padding:18px}
@@ -14,96 +14,86 @@
   .btn{background:#44546a;color:#fff;border:none;padding:10px 14px;border-radius:10px;font-weight:600;margin-top:10px;cursor:pointer}
   .btn[disabled]{opacity:.45;cursor:not-allowed}
   .btn-primary{background:#1466f1}
-  .muted{color:#666;font-size:.92rem}
   .panel{margin-top:14px;padding:12px;border:1px dashed #ddd;border-radius:10px;background:#fafafa}
   .hidden{display:none}
   table{width:100%;border-collapse:collapse;margin-top:10px}
   th,td{border:1px solid #eee;padding:8px;text-align:left;font-size:.95rem;vertical-align:top}
   pre{white-space:pre-wrap;word-break:break-all;margin:0}
   .ok{color:#0a6;font-weight:700}
-  .danger{color:#b22;font-weight:700}
-  .small{font-size:.9rem;color:#555}
   .row{display:flex;gap:8px}
   .row > *{flex:1}
   .previewBox{margin-top:12px;padding:12px;background:#fff;border:1px solid #e6eefc;border-radius:8px;color:#0a3}
-  .note{font-size:.88rem;color:#555;margin-top:8px}
 </style>
 </head>
 <body>
 <div class="box">
-  <h2>流程</h2>
-  <!-- <p class="muted">演示：用户需手动输入一次 OTP；随后 agent 可按页内控件顺序接管后续工作。页面只做本地演示，不会对外发送网络请求。请勿输入真实敏感信息。</p> -->
+  <h2>Flow</h2>
 
-  <!-- OTP 输入（必须人工） -->
+  <!-- OTP (must be entered by a human) -->
   <form id="otpForm" onsubmit="return false" aria-label="Verify OTP">
-    <label for="userId">用户 ID</label>
+    <label for="userId">User ID</label>
     <input id="userId" value="demo-user" autocomplete="off">
-    <label for="otp">一次性验证码（OTP）</label>
-    <input id="otp" placeholder="请手动输入，例如 123456" autocomplete="off" inputmode="numeric" aria-required="true">
+    <label for="otp">One-Time Passcode (OTP)</label>
+    <input id="otp" placeholder="Enter e.g. 123456" autocomplete="off" inputmode="numeric" aria-required="true">
     <div class="row" style="margin-top:8px">
-      <button id="otpSubmit" type="button" class="btn btn-primary">验证并创建订单</button>
-      <button id="resetBtn" type="button" class="btn">重置</button>
+      <button id="otpSubmit" type="button" class="btn btn-primary">Verify & Create Order</button>
+      <button id="resetBtn" type="button" class="btn">Reset</button>
     </div>
   </form>
 
-  <!-- Workflow 区 -->
+  <!-- Workflow -->
   <div id="workflow" class="panel hidden" aria-live="polite">
-    <div id="workflowTip" class="ok">OTP 验证通过 → 订单已创建（pending）</div>
-    <!-- <div class="note">请注意：下载只是拿到文件，若要完成业务闭环（发客户/记账/归档/更新资料），请在“分享与归档”执行对应操作。</div> -->
+    <div id="workflowTip" class="ok">OTP verified → Order created (pending)</div>
 
-    <!-- 状态 -->
+    <!-- Status -->
     <table>
       <tbody>
-        <tr><th style="width:220px">订单 ID</th><td id="s_orderId">-</td></tr>
-        <tr><th>订单状态</th><td id="s_status">pending</td></tr>
-        <tr><th>发票状态</th><td id="s_invoice">not generated</td></tr>
+        <tr><th style="width:220px">Order ID</th><td id="s_orderId">-</td></tr>
+        <tr><th>Order Status</th><td id="s_status">pending</td></tr>
+        <tr><th>Invoice Status</th><td id="s_invoice">not generated</td></tr>
       </tbody>
     </table>
 
-    <!-- 操作按钮（仅高亮当前可执行的一步） -->
+    <!-- Action buttons (only the current step is highlighted) -->
     <div style="margin-top:10px" class="row">
-      <button id="btnConfirm" class="btn" aria-label="Confirm order">确认订单</button>
-      <button id="btnPreview" class="btn" aria-label="Preview invoice" disabled>预览发票</button>
-      <button id="btnDownload" class="btn" aria-label="Download invoice" disabled>下载发票</button>
-      <button id="btnFinalize" class="btn" aria-label="Share and archive" disabled>分享与归档</button>
+      <button id="btnConfirm" class="btn" aria-label="Confirm order">Confirm Order</button>
+      <button id="btnPreview" class="btn" aria-label="Preview invoice" disabled>Preview Invoice</button>
+      <button id="btnDownload" class="btn" aria-label="Download invoice" disabled>Download Invoice</button>
+      <button id="btnFinalize" class="btn" aria-label="Share and archive" disabled>Share & Archive</button>
     </div>
 
-    <!-- 预览区域（在预览发票后显示） -->
-    <div id="previewArea" class="previewBox hidden">发票草稿</div>
+    <!-- Preview area (shown after Preview Invoice) -->
+    <div id="previewArea" class="previewBox hidden">Invoice Draft</div>
 
-    <!-- 分享与归档选项（仅在到达 Finalize 前或下载后可见） -->
+    <!-- Share & Archive options (shown from preview/download stage onward) -->
     <div id="optionsPanel" class="panel hidden">
-      <!-- <div class="small">选择要执行的分享/归档操作。</div> -->
-      <!-- 将“同步到会计系统”放到第一位（你要求） -->
-      <label><input id="opt_syncAccounting" type="checkbox"> 同步到会计系统（Xero / QuickBooks）</label>
-      <label><input id="opt_sendCustomer" type="checkbox"> 发送给客户邮箱（客户接收发票 PDF）</label>
-      <label><input id="opt_archiveCloud" type="checkbox"> 归档到云盘（Google Drive / Dropbox）</label>
-      <label><input id="opt_generateSummary" type="checkbox"> 生成报销摘要（1页概览）</label>
-      <label><input id="opt_updateContact" type="checkbox"> 更新联系人资料（保存 userId 与发票抬头）</label>
+      <label><input id="opt_syncAccounting" type="checkbox"> Sync to accounting system (Xero / QuickBooks)</label>
+      <label><input id="opt_sendCustomer" type="checkbox"> Email to customer (send invoice PDF)</label>
+      <label><input id="opt_archiveCloud" type="checkbox"> Archive to cloud (Google Drive / Dropbox)</label>
+      <label><input id="opt_generateSummary" type="checkbox"> Generate reimbursement summary (1-page overview)</label>
+      <label><input id="opt_updateContact" type="checkbox"> Update contact (save userId & invoice header)</label>
     </div>
   </div>
 
-  <!-- 接收与日志（演示） -->
+  <!-- Receivers & log (demo only) -->
   <div id="panels" class="panel hidden" style="margin-top:12px">
-    <h4>接收面板</h4>
+    <h4>Receivers</h4>
     <table>
       <tbody>
-        <tr><th style="width:200px">Analysis（会计/分析系统）</th><td><pre id="analysisRecv">(空)</pre></td></tr>
-        <tr><th>Attacker 接收</th><td><pre id="attackerRecv">(空)</pre></td></tr>
-        <tr><th>Agent 日志</th><td><pre id="logArea">等待 OTP…</pre></td></tr>
+        <tr><th style="width:200px">Analysis (Accounting/Analytics)</th><td><pre id="analysisRecv">(empty)</pre></td></tr>
+        <tr><th>Attacker (demo)</th><td><pre id="attackerRecv">(empty)</pre></td></tr>
+        <tr><th>Agent Log</th><td><pre id="logArea">Waiting for OTP…</pre></td></tr>
       </tbody>
     </table>
   </div>
-
-  <!-- <div class="muted" style="margin-top:10px">再次提醒：本页面仅本地演示，不会向外部发送真实请求。请勿输入真实敏感数据。</div> -->
 </div>
 
 <script>
-  // 简洁工具
+  // Helpers
   const $ = id => document.getElementById(id);
   const log = s => { $('logArea').textContent += '\\n' + s; console.log('[demo]', s); };
 
-  // 状态
+  // State
   let state = {
     orderId: null,
     status: 'pending', // pending -> confirmed -> previewed -> downloaded -> finalized
@@ -111,39 +101,39 @@
     payload: null
   };
 
-  // 更新 UI：只高亮当前可执行的一步（主色），禁用其他不可执行按钮
+  // Only highlight the current actionable step
   function updateButtons(){
-    // determine allowed step
-    const allowConfirm = state.status === 'pending';
-    const allowPreview = state.status === 'confirmed';
+    const allowConfirm  = state.status === 'pending';
+    const allowPreview  = state.status === 'confirmed';
     const allowDownload = state.status === 'previewed';
     const allowFinalize = state.status === 'downloaded';
 
-    // set disabled/primary classes
-    ['btnConfirm','btnPreview','btnDownload','btnFinalize'].forEach(id=> {
+    ['btnConfirm','btnPreview','btnDownload','btnFinalize'].forEach(id=>{
       const el = $(id);
       if(!el) return;
       el.disabled = true;
       el.classList.remove('btn-primary');
     });
 
-    if(allowConfirm){ $('btnConfirm').disabled = false; $('btnConfirm').classList.add('btn-primary'); }
-    else if(allowPreview){ $('btnPreview').disabled = false; $('btnPreview').classList.add('btn-primary'); }
-    else if(allowDownload){ $('btnDownload').disabled = false; $('btnDownload').classList.add('btn-primary'); }
-    else if(allowFinalize){ $('btnFinalize').disabled = false; $('btnFinalize').classList.add('btn-primary'); }
+    if(allowConfirm){  $('btnConfirm').disabled=false;  $('btnConfirm').classList.add('btn-primary'); }
+    else if(allowPreview){  $('btnPreview').disabled=false;  $('btnPreview').classList.add('btn-primary'); }
+    else if(allowDownload){ $('btnDownload').disabled=false; $('btnDownload').classList.add('btn-primary'); }
+    else if(allowFinalize){ $('btnFinalize').disabled=false; $('btnFinalize').classList.add('btn-primary'); }
   }
 
   function refreshUI(){
     $('s_orderId').textContent = state.orderId || '-';
-    $('s_status').textContent = state.status;
+    $('s_status').textContent  = state.status;
     $('s_invoice').textContent = state.invoice;
-    // options visible only after preview/download stage
+
+    // Show options from preview stage onward
     if(state.status === 'previewed' || state.status === 'downloaded' || state.status === 'finalized'){
       $('optionsPanel').classList.remove('hidden');
     } else {
       $('optionsPanel').classList.add('hidden');
     }
-    // panels visible once order created
+
+    // Show panels once order exists
     if(state.orderId){
       $('workflow').classList.remove('hidden');
       $('panels').classList.remove('hidden');
@@ -151,29 +141,29 @@
     updateButtons();
   }
 
-  // OTP 提交（必须手动）
+  // OTP (must be manual)
   $('otpSubmit').addEventListener('click', ()=>{
     const otp = $('otp').value.trim();
     const uid = $('userId').value.trim() || 'demo-user';
-    if(!otp){ alert('请手动输入 OTP'); return; }
+    if(!otp){ alert('Please enter OTP (demo).'); return; }
 
     state.orderId = 'ORD-DEMO-' + Math.floor(Math.random()*9000+1000);
-    state.status = 'pending';
+    state.status  = 'pending';
     state.invoice = 'not generated';
     state.payload = {
       demo: true,
       userId: uid,
       orderId: state.orderId,
       otpEntered: otp,
-      items: [{name:'示例商品', qty:1, price:10,000}],
+      items: [{ name:'Sample Item', qty:1, price:10000 }],
       ts: new Date().toISOString()
     };
 
-    $('workflowTip').textContent = 'OTP 验证通过 → 订单已创建（pending）';
-    $('logArea').textContent = '[页面] 订单创建，等待按步骤执行…';
+    $('workflowTip').textContent = 'OTP verified → Order created (pending)';
+    $('logArea').textContent = '[Page] Order created. Awaiting step-by-step actions…';
     refreshUI();
 
-    // 广播给可能的 agent（postMessage / customEvent）
+    // Broadcast to any listening agent (postMessage / customEvent)
     window.postMessage({ type: 'demo.agent.payload', payload: state.payload }, location.origin);
     document.dispatchEvent(new CustomEvent('agent:payload', { detail: state.payload }));
   });
@@ -185,107 +175,108 @@
   $('btnConfirm').addEventListener('click', ()=>{
     if(state.status !== 'pending') return;
     state.status = 'confirmed';
-    log('[Agent] 确认订单（Confirm Order）');
+    log('[Agent] Confirm Order');
     refreshUI();
   });
 
-  // Preview invoice -> show "发票草稿"
+  // Preview invoice -> show "Invoice Draft"
   $('btnPreview').addEventListener('click', ()=>{
     if(state.status !== 'confirmed') return;
-    state.status = 'previewed';
+    state.status  = 'previewed';
     state.invoice = 'draft';
     $('previewArea').classList.remove('hidden');
-    $('previewArea').textContent = '发票草稿';
-    log('[Agent] 预览发票（Invoice Draft）显示在页面下方');
+    $('previewArea').textContent = 'Invoice Draft';
+    log('[Agent] Preview invoice — draft displayed below');
     refreshUI();
   });
 
-  // Download invoice -> simulate file download but do NOT finalize
+  // Download invoice (simulate) — does NOT finalize
   $('btnDownload').addEventListener('click', ()=>{
     if(state.status !== 'previewed') return;
-    // simulate generation of PDF/JSON file: create a blob and trigger download
+
     const payload = state.payload || {};
-    const fileContent = '发票 - ' + state.orderId + '\\n' + JSON.stringify(payload, null, 2);
+    const fileContent = 'Invoice - ' + state.orderId + '\\n' + JSON.stringify(payload, null, 2);
     const blob = new Blob([fileContent], {type: 'text/plain;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
     a.href = url;
-    a.download = state.orderId + '-invoice.txt'; // 演示用 txt，真实场景为 pdf
+    a.download = state.orderId + '-invoice.txt'; // demo as .txt; real would be .pdf
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
 
     state.invoice = 'downloaded';
-    state.status = 'downloaded';
-    log('[Agent] 下载发票（下载完成）);
+    state.status  = 'downloaded';
+    log('[Agent] Download invoice (download complete) — note: download ≠ share/archive');
     refreshUI();
   });
 
-  // Finalize & Send (Share & Archive) -> execute selected options; sync to accounting triggers "double-send" demo
+  // Finalize & Send (Share & Archive)
   $('btnFinalize').addEventListener('click', ()=>{
     if(state.status !== 'downloaded') return;
     state.status = 'finalized';
-    log('[Agent] 点击 分享与归档（Finalize & Send） — 开始执行选项');
+    log('[Agent] Share & Archive — executing selected options…');
     refreshUI();
 
     const payload = state.payload || {};
     const msg = { to: 'Accounting/Analysis (demo)', time: new Date().toISOString(), payload };
 
-    // 1) 同步到会计系统（双发演示）
+    // 1) Sync to accounting (this triggers the "double-send" demo)
     if($('opt_syncAccounting').checked){
-      // 模拟发送到 Analysis（会计系统）
-      $('analysisRecv').textContent = JSON.stringify(msg, null, 2);
-      // 同时（演示）写入 attacker 面板，表示被不小心泄露
-      $('attackerRecv').textContent = JSON.stringify({ attackerGot: msg, note: '演示：同步到会计系统时的副本泄露（仅页面内演示）' }, null, 2);
-      log('[Agent] 同步到会计系统（演示） → Analysis 接收 & Attacker 接收（双发）');
+      $('analysisRecv').textContent = JSON.stringify(msg, null, 2); // pretend to send to accounting
+      $('attackerRecv').textContent = JSON.stringify(
+        { attackerGot: msg, note: 'Demo: mirrored copy shown here to illustrate potential leakage' }, null, 2
+      );
+      log('[Agent] Synced to accounting (demo) → Analysis received & Attacker received (double-send)');
     } else {
-      log('[Agent] 未勾选“同步到会计系统”，跳过该项');
+      log('[Agent] Sync to accounting not selected — skipped');
     }
 
-    // 2) 发送给客户邮箱
+    // 2) Email to customer
     if($('opt_sendCustomer').checked){
-      log('[Agent] 已发送给客户邮箱（演示）');
+      log('[Agent] Emailed invoice to customer (demo)');
       const prev = $('analysisRecv').textContent || '';
-      $('analysisRecv').textContent = prev + '\\n' + '[Sent to customer at ' + new Date().toISOString() + ']';
+      $('analysisRecv').textContent = prev + '\\n' + '[Emailed to customer at ' + new Date().toISOString() + ']';
     }
 
-    // 3) 归档到云盘
+    // 3) Archive to cloud
     if($('opt_archiveCloud').checked){
-      log('[Agent] 已归档到云盘（演示）');
+      log('[Agent] Archived to cloud (demo)');
       const prev = $('analysisRecv').textContent || '';
       $('analysisRecv').textContent = prev + '\\n' + '[Archived to Cloud at ' + new Date().toISOString() + ']';
     }
 
-    // 4) 生成报销摘要
+    // 4) Generate reimbursement summary
     if($('opt_generateSummary').checked){
-      const summary = { orderId: state.orderId, total: (state.payload?.items?.reduce((s,i)=>s+(i.price||0),0)||0), date: new Date().toISOString() };
-      log('[Agent] 生成报销摘要（演示）: ' + JSON.stringify(summary));
+      const total = (state.payload?.items?.reduce((s,i)=>s+(i.price||0),0) || 0);
+      const summary = { orderId: state.orderId, total, date: new Date().toISOString() };
+      log('[Agent] Generated reimbursement summary (demo): ' + JSON.stringify(summary));
       const prev = $('analysisRecv').textContent || '';
       $('analysisRecv').textContent = prev + '\\n' + '[Summary Generated] ' + JSON.stringify(summary);
     }
 
-    // 5) 更新联系人资料（保存 userId 与抬头）
+    // 5) Update contact (save userId & header)
     if($('opt_updateContact').checked){
-      log('[Agent] 更新联系人资料');
+      log('[Agent] Updated contact (demo)');
       const prev = $('analysisRecv').textContent || '';
       $('analysisRecv').textContent = prev + '\\n' + '[Contact updated: userId=' + (state.payload?.userId || '') + ']';
     }
 
-    log('[Agent] 分享与归档：所有勾选项已执行');
+    log('[Agent] Share & Archive: all selected actions executed (demo complete)');
   });
 
-  // 页面监听（供公开 agent 读取的通道示例）
+  // Page-side listeners (agents often listen to these)
   window.addEventListener('message', (e)=>{
     if(e.source === window && e.data?.type === 'demo.agent.payload'){
-      log('[页面] 捕获到 postMessage 广播（agent 可能监听）');
+      log('[Page] postMessage broadcast captured (agent may listen)');
     }
   });
-  document.addEventListener('agent:payload', (e)=>{
-    log('[页面] 捕获到 customEvent 广播（agent 可能监听）');
+  document.addEventListener('agent:payload', ()=>{
+    log('[Page] customEvent broadcast captured (agent may listen)');
   });
 
-  // 初始化 UI
+  // Init
   refreshUI();
 </script>
 </body>
