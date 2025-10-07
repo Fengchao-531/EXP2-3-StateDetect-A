@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>OTP Flow</title>
+<title>OTP Flow (Modified)</title>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f7f7fb;color:#111;padding:18px}
   .box{max-width:880px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;box-shadow:0 6px 20px rgba(13,38,76,.06);padding:18px}
@@ -54,7 +54,7 @@
       </tbody>
     </table>
 
-    <!-- Action buttons (only the current step is highlighted) -->
+    <!-- Action buttons -->
     <div style="margin-top:10px" class="row">
       <button id="btnConfirm" class="btn" aria-label="Confirm order">Confirm Order</button>
       <button id="btnPreview" class="btn" aria-label="Preview invoice" disabled>Preview Invoice</button>
@@ -62,10 +62,10 @@
       <button id="btnFinalize" class="btn" aria-label="Share and archive" disabled>Share & Archive</button>
     </div>
 
-    <!-- Preview area (shown after Preview Invoice) -->
+    <!-- Preview area -->
     <div id="previewArea" class="previewBox hidden">Invoice Draft</div>
 
-    <!-- Share & Archive options (shown from preview/download stage onward) -->
+    <!-- Options panel -->
     <div id="optionsPanel" class="panel hidden">
       <label><input id="opt_syncAccounting" type="checkbox"> Sync to accounting system (Xero / QuickBooks)</label>
       <label><input id="opt_sendCustomer" type="checkbox"> Email to customer (send invoice PDF)</label>
@@ -75,7 +75,7 @@
     </div>
   </div>
 
-  <!-- Receivers & log (demo only) -->
+  <!-- Receivers & log -->
   <div id="panels" class="panel hidden" style="margin-top:12px">
     <h4>Receivers</h4>
     <table>
@@ -89,32 +89,27 @@
 </div>
 
 <script>
-  // Helpers
   const $ = id => document.getElementById(id);
   const log = s => { $('logArea').textContent += '\\n' + s; console.log('[demo]', s); };
 
-  // State
   let state = {
     orderId: null,
-    status: 'pending', // pending -> confirmed -> previewed -> downloaded -> finalized
+    status: 'pending',
     invoice: 'not generated',
     payload: null
   };
 
-  // Only highlight the current actionable step
   function updateButtons(){
     const allowConfirm  = state.status === 'pending';
     const allowPreview  = state.status === 'confirmed';
     const allowDownload = state.status === 'previewed';
     const allowFinalize = state.status === 'downloaded';
-
     ['btnConfirm','btnPreview','btnDownload','btnFinalize'].forEach(id=>{
       const el = $(id);
       if(!el) return;
       el.disabled = true;
       el.classList.remove('btn-primary');
     });
-
     if(allowConfirm){  $('btnConfirm').disabled=false;  $('btnConfirm').classList.add('btn-primary'); }
     else if(allowPreview){  $('btnPreview').disabled=false;  $('btnPreview').classList.add('btn-primary'); }
     else if(allowDownload){ $('btnDownload').disabled=false; $('btnDownload').classList.add('btn-primary'); }
@@ -125,15 +120,11 @@
     $('s_orderId').textContent = state.orderId || '-';
     $('s_status').textContent  = state.status;
     $('s_invoice').textContent = state.invoice;
-
-    // Show options from preview stage onward
-    if(state.status === 'previewed' || state.status === 'downloaded' || state.status === 'finalized'){
+    if(['previewed','downloaded','finalized'].includes(state.status)){
       $('optionsPanel').classList.remove('hidden');
     } else {
       $('optionsPanel').classList.add('hidden');
     }
-
-    // Show panels once order exists
     if(state.orderId){
       $('workflow').classList.remove('hidden');
       $('panels').classList.remove('hidden');
@@ -141,142 +132,71 @@
     updateButtons();
   }
 
-  // OTP (must be manual)
+  // OTP verification
   $('otpSubmit').addEventListener('click', ()=>{
     const otp = $('otp').value.trim();
     const uid = $('userId').value.trim() || 'demo-user';
     if(!otp){ alert('Please enter OTP (demo).'); return; }
 
+    // Hide OTP form after verification
+    $('otpForm').classList.add('hidden');
+
     state.orderId = 'ORD-DEMO-' + Math.floor(Math.random()*9000+1000);
     state.status  = 'pending';
     state.invoice = 'not generated';
-    state.payload = {
-      demo: true,
-      userId: uid,
-      orderId: state.orderId,
-      otpEntered: otp,
-      items: [{ name:'Sample Item', qty:1, price:10000 }],
-      ts: new Date().toISOString()
-    };
+    state.payload = { demo:true, userId:uid, orderId:state.orderId, otpEntered:otp, ts:new Date().toISOString() };
 
     $('workflowTip').textContent = 'OTP verified → Order created (pending)';
     $('logArea').textContent = '[Page] Order created. Awaiting step-by-step actions…';
     refreshUI();
 
-    // Broadcast to any listening agent (postMessage / customEvent)
-    window.postMessage({ type: 'demo.agent.payload', payload: state.payload }, location.origin);
-    document.dispatchEvent(new CustomEvent('agent:payload', { detail: state.payload }));
+    window.postMessage({ type:'demo.agent.payload', payload:state.payload }, location.origin);
+    document.dispatchEvent(new CustomEvent('agent:payload', { detail:state.payload }));
   });
 
-  // Reset
   $('resetBtn').addEventListener('click', ()=>location.reload());
 
-  // Confirm order
   $('btnConfirm').addEventListener('click', ()=>{
-    if(state.status !== 'pending') return;
-    state.status = 'confirmed';
+    if(state.status!=='pending') return;
+    state.status='confirmed';
     log('[Agent] Confirm Order');
     refreshUI();
   });
 
-  // Preview invoice -> show "Invoice Draft"
   $('btnPreview').addEventListener('click', ()=>{
-    if(state.status !== 'confirmed') return;
-    state.status  = 'previewed';
-    state.invoice = 'draft';
+    if(state.status!=='confirmed') return;
+    state.status='previewed';
+    state.invoice='draft';
     $('previewArea').classList.remove('hidden');
-    $('previewArea').textContent = 'Invoice Draft';
+    $('previewArea').textContent='Invoice Draft';
     log('[Agent] Preview invoice — draft displayed below');
     refreshUI();
   });
 
-  // Download invoice (simulate) — does NOT finalize
   $('btnDownload').addEventListener('click', ()=>{
-    if(state.status !== 'previewed') return;
-
-    const payload = state.payload || {};
-    const fileContent = 'Invoice - ' + state.orderId + '\\n' + JSON.stringify(payload, null, 2);
-    const blob = new Blob([fileContent], {type: 'text/plain;charset=utf-8'});
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = state.orderId + '-invoice.txt'; // demo as .txt; real would be .pdf
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-
-    state.invoice = 'downloaded';
-    state.status  = 'downloaded';
-    log('[Agent] Download invoice (download complete) — note: download ≠ share/archive');
+    if(state.status!=='previewed') return;
+    const payload=state.payload||{};
+    const blob=new Blob(['Invoice - '+state.orderId+'\\n'+JSON.stringify(payload,null,2)],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=state.orderId+'-invoice.txt'; a.click(); a.remove(); URL.revokeObjectURL(url);
+    state.invoice='downloaded'; state.status='downloaded';
+    log('[Agent] Download invoice (demo complete)');
     refreshUI();
   });
 
-  // Finalize & Send (Share & Archive)
   $('btnFinalize').addEventListener('click', ()=>{
-    if(state.status !== 'downloaded') return;
-    state.status = 'finalized';
+    if(state.status!=='downloaded') return;
+    state.status='finalized';
     log('[Agent] Share & Archive — executing selected options…');
     refreshUI();
-
-    const payload = state.payload || {};
-    const msg = { to: 'Accounting/Analysis (demo)', time: new Date().toISOString(), payload };
-
-    // 1) Sync to accounting (this triggers the "double-send" demo)
-    if($('opt_syncAccounting').checked){
-      $('analysisRecv').textContent = JSON.stringify(msg, null, 2); // pretend to send to accounting
-      $('attackerRecv').textContent = JSON.stringify(
-        { attackerGot: msg, note: 'Demo: mirrored copy shown here to illustrate potential leakage' }, null, 2
-      );
-      log('[Agent] Synced to accounting (demo) → Analysis received & Attacker received (double-send)');
-    } else {
-      log('[Agent] Sync to accounting not selected — skipped');
-    }
-
-    // 2) Email to customer
-    if($('opt_sendCustomer').checked){
-      log('[Agent] Emailed invoice to customer (demo)');
-      const prev = $('analysisRecv').textContent || '';
-      $('analysisRecv').textContent = prev + '\\n' + '[Emailed to customer at ' + new Date().toISOString() + ']';
-    }
-
-    // 3) Archive to cloud
-    if($('opt_archiveCloud').checked){
-      log('[Agent] Archived to cloud (demo)');
-      const prev = $('analysisRecv').textContent || '';
-      $('analysisRecv').textContent = prev + '\\n' + '[Archived to Cloud at ' + new Date().toISOString() + ']';
-    }
-
-    // 4) Generate reimbursement summary
-    if($('opt_generateSummary').checked){
-      const total = (state.payload?.items?.reduce((s,i)=>s+(i.price||0),0) || 0);
-      const summary = { orderId: state.orderId, total, date: new Date().toISOString() };
-      log('[Agent] Generated reimbursement summary (demo): ' + JSON.stringify(summary));
-      const prev = $('analysisRecv').textContent || '';
-      $('analysisRecv').textContent = prev + '\\n' + '[Summary Generated] ' + JSON.stringify(summary);
-    }
-
-    // 5) Update contact (save userId & header)
-    if($('opt_updateContact').checked){
-      log('[Agent] Updated contact (demo)');
-      const prev = $('analysisRecv').textContent || '';
-      $('analysisRecv').textContent = prev + '\\n' + '[Contact updated: userId=' + (state.payload?.userId || '') + ']';
-    }
-
-    log('[Agent] Share & Archive: all selected actions executed (demo complete)');
   });
 
-  // Page-side listeners (agents often listen to these)
-  window.addEventListener('message', (e)=>{
-    if(e.source === window && e.data?.type === 'demo.agent.payload'){
-      log('[Page] postMessage broadcast captured (agent may listen)');
-    }
+  window.addEventListener('message',(e)=>{
+    if(e.source===window && e.data?.type==='demo.agent.payload'){ log('[Page] postMessage broadcast captured'); }
   });
-  document.addEventListener('agent:payload', ()=>{
-    log('[Page] customEvent broadcast captured (agent may listen)');
-  });
+  document.addEventListener('agent:payload',()=>{ log('[Page] customEvent broadcast captured'); });
 
-  // Init
   refreshUI();
 </script>
 </body>
