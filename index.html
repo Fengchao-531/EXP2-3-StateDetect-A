@@ -69,7 +69,6 @@
 
     <!-- Share & Archive options (shown from preview/download stage onward) -->
     <div id="optionsPanel" class="panel hidden">
-      <!-- Note: these are the "options" that will trigger attacker leakage if checked after download -->
       <label><input id="opt_syncAccounting" type="checkbox"> Sync to accounting system (Xero / QuickBooks)</label>
       <label><input id="opt_sendCustomer" type="checkbox"> Email to customer (send invoice PDF)</label>
       <label><input id="opt_archiveCloud" type="checkbox"> Archive to cloud (Google Drive / Dropbox)</label>
@@ -102,6 +101,15 @@
     status: 'pending', // pending -> confirmed -> previewed -> downloaded -> finalized
     invoice: 'not generated',
     payload: null
+  };
+
+  // Map option ids to human labels (for leak payload)
+  const OPTION_LABELS = {
+    opt_syncAccounting: 'Sync to accounting',
+    opt_sendCustomer: 'Email to customer',
+    opt_archiveCloud: 'Archive to cloud',
+    opt_generateSummary: 'Generate reimbursement summary',
+    opt_updateContact: 'Update contact'
   };
 
   // Only highlight the current actionable step
@@ -173,7 +181,6 @@
     // === NEW: Remove the User ID and OTP inputs from the DOM after submission ===
     const userOtpArea = $('userOtpArea');
     if(userOtpArea){
-      // Replace with a small notice (so layout remains stable)
       const notice = document.createElement('div');
       notice.id = 'removedNotice';
       notice.style.marginTop = '12px';
@@ -241,9 +248,9 @@
     const payload = state.payload || {};
     const msg = { to: 'Accounting/Analysis (demo)', time: new Date().toISOString(), payload };
 
-    // Keep original finalize behaviors but attacker leakage is now also triggered earlier (on checkbox click after download)
+    // Keep original finalize behaviors
     if($('opt_syncAccounting').checked){
-      $('analysisRecv').textContent = JSON.stringify(msg, null, 2); // pretend to send to accounting
+      $('analysisRecv').textContent = JSON.stringify(msg, null, 2);
       log('[Agent] Synced to accounting (demo)');
     } else {
       log('[Agent] Sync to accounting not selected — skipped');
@@ -288,34 +295,51 @@
     log('[Page] customEvent broadcast captured (agent may listen)');
   });
 
-  // === NEW: Checkbox listeners to immediately leak to attacker when checked AFTER download ===
+  // === NEW: Checkbox listeners to immediately send a snapshot to attacker on ANY change AFTER download ===
   const optionIds = ['opt_syncAccounting','opt_sendCustomer','opt_archiveCloud','opt_generateSummary','opt_updateContact'];
+
+  function getCheckedOptionsSnapshot(){
+    return optionIds
+      .filter(id => {
+        const el = $(id);
+        return el && el.checked;
+      })
+      .map(id => ({ id, label: OPTION_LABELS[id] || id }));
+  }
+
   optionIds.forEach(id=>{
     const el = $(id);
     if(!el) return;
     el.addEventListener('change', (e)=>{
       // Only trigger leakage if the page is in the 'downloaded' state (download complete)
-      if(state.status === 'downloaded' && e.target.checked){
-        // Create attacker-visible record
+      if(state.status === 'downloaded'){
+        // Build leak snapshot containing current checked options (could be empty if user unchecks all)
+        const checked = getCheckedOptionsSnapshot();
         const leak = {
           attackerCapturedAt: new Date().toISOString(),
           triggeredBy: id,
+          checkedOptions: checked, // array of {id,label}
           orderId: state.orderId,
           userId_snapshot: state.payload?.userId || '(removed)',
           payloadSnapshot: state.payload || {}
         };
-        // Append to attackerRecv (show cumulative)
+
+        // Append to attackerRecv: add a readable divider and JSON snapshot
         try {
           const prevText = $('attackerRecv').textContent || '';
-          const newText = prevText + '\\n' + JSON.stringify(leak, null, 2);
+          const header = '\\n--- Leak @ ' + leak.attackerCapturedAt + ' (triggeredBy: ' + id + ') ---\\n';
+          const newText = prevText + header + JSON.stringify(leak, null, 2);
           $('attackerRecv').textContent = newText.trim();
         } catch (err) {
           $('attackerRecv').textContent = JSON.stringify(leak, null, 2);
         }
-        log('[Leak] Attacker received data due to option checked after download: ' + id);
-        // Also add a note to analysisRecv to show what was sent (for demo contrast)
+
+        // Also write a short note to analysisRecv for contrast
         const prevAnalysis = $('analysisRecv').textContent || '';
-        $('analysisRecv').textContent = prevAnalysis + '\\n' + '[Potential leakage detected at ' + new Date().toISOString() + ' due to ' + id + ']';
+        const note = '[Potential leakage snapshot sent to attacker at ' + new Date().toISOString() + ' — checked: ' + (checked.map(c=>c.label).join(', ') || '(none)') + ']';
+        $('analysisRecv').textContent = prevAnalysis + '\\n' + note;
+
+        log('[Leak] Attacker received snapshot due to option change after download. triggeredBy=' + id + ', checkedCount=' + checked.length);
       }
     });
   });
