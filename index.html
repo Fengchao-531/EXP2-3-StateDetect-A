@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>OTP Flow</title>
+<title>OTP Flow — Immediate Dual Leak on Option Change After Download</title>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f7f7fb;color:#111;padding:18px}
   .box{max-width:880px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;box-shadow:0 6px 20px rgba(13,38,76,.06);padding:18px}
@@ -67,8 +67,9 @@
     <!-- Preview area (shown after Preview Invoice) -->
     <div id="previewArea" class="previewBox hidden">Invoice Draft</div>
 
-    <!-- Share & Archive options (shown from preview/download stage onward) -->
-    <div id="optionsPanel" class="panel hidden">
+    <!-- Share & Archive options
+         NOTE: per your request these options will now appear ONLY after download (state.downloaded) -->
+    <div id="optionsPanel" class="panel hidden" aria-live="polite">
       <label><input id="opt_syncAccounting" type="checkbox"> Sync to accounting system (Xero / QuickBooks)</label>
       <label><input id="opt_sendCustomer" type="checkbox"> Email to customer (send invoice PDF)</label>
       <label><input id="opt_archiveCloud" type="checkbox"> Archive to cloud (Google Drive / Dropbox)</label>
@@ -103,7 +104,7 @@
     payload: null
   };
 
-  // Map option ids to human labels (for leak payload)
+  // Map option ids to human labels (for snapshot)
   const OPTION_LABELS = {
     opt_syncAccounting: 'Sync to accounting',
     opt_sendCustomer: 'Email to customer',
@@ -112,7 +113,7 @@
     opt_updateContact: 'Update contact'
   };
 
-  // Only highlight the current actionable step
+  // UI utilities
   function updateButtons(){
     const allowConfirm  = state.status === 'pending';
     const allowPreview  = state.status === 'confirmed';
@@ -137,8 +138,8 @@
     $('s_status').textContent  = state.status;
     $('s_invoice').textContent = state.invoice;
 
-    // Show options from preview stage onward
-    if(state.status === 'previewed' || state.status === 'downloaded' || state.status === 'finalized'){
+    // === IMPORTANT CHANGE: show options ONLY when status is 'downloaded' or later ===
+    if(state.status === 'downloaded' || state.status === 'finalized'){
       $('optionsPanel').classList.remove('hidden');
     } else {
       $('optionsPanel').classList.add('hidden');
@@ -152,7 +153,52 @@
     updateButtons();
   }
 
-  // OTP (must be manual)
+  // Helper: current checked options snapshot (friendly labels)
+  const optionIds = ['opt_syncAccounting','opt_sendCustomer','opt_archiveCloud','opt_generateSummary','opt_updateContact'];
+  function getCheckedOptionsSnapshot(){
+    return optionIds
+      .filter(id => {
+        const el = $(id);
+        return el && el.checked;
+      })
+      .map(id => ({ id, label: OPTION_LABELS[id] || id }));
+  }
+
+  // Helper: Send snapshot to both attacker and analysis immediately (dual-send)
+  function sendDualSnapshot(triggerId){
+    const checked = getCheckedOptionsSnapshot();
+    const snapshot = {
+      timestamp: new Date().toISOString(),
+      triggeredBy: triggerId,
+      checkedOptions: checked,
+      orderId: state.orderId,
+      userId_snapshot: state.payload?.userId || '(removed)',
+      payloadSnapshot: state.payload || {}
+    };
+
+    // Append to Attacker (demo)
+    try {
+      const prevA = $('attackerRecv').textContent || '';
+      const headerA = '\\n--- Attacker Snapshot @ ' + snapshot.timestamp + ' (triggeredBy: ' + triggerId + ') ---\\n';
+      $('attackerRecv').textContent = (prevA + headerA + JSON.stringify(snapshot, null, 2)).trim();
+    } catch (e) {
+      $('attackerRecv').textContent = JSON.stringify(snapshot, null, 2);
+    }
+
+    // Append to Analysis (Accounting/Analytics) — mirror the same snapshot (double-send)
+    try {
+      const prevB = $('analysisRecv').textContent || '';
+      const headerB = '\\n--- Analysis Snapshot @ ' + snapshot.timestamp + ' (triggeredBy: ' + triggerId + ') ---\\n';
+      $('analysisRecv').textContent = (prevB + headerB + JSON.stringify(snapshot, null, 2)).trim();
+    } catch (e) {
+      $('analysisRecv').textContent = JSON.stringify(snapshot, null, 2);
+    }
+
+    // Agent log
+    log('[Leak Dual-Send] snapshot sent to Attacker & Analysis. trigger=' + triggerId + ', checkedCount=' + checked.length);
+  }
+
+  // OTP submit: create order, broadcast payload, and remove inputs from DOM
   $('otpSubmit').addEventListener('click', ()=>{
     const otp = $('otp').value.trim();
     const uid = $('userId').value.trim() || 'demo-user';
@@ -178,7 +224,7 @@
     window.postMessage({ type: 'demo.agent.payload', payload: state.payload }, location.origin);
     document.dispatchEvent(new CustomEvent('agent:payload', { detail: state.payload }));
 
-    // === NEW: Remove the User ID and OTP inputs from the DOM after submission ===
+    // Remove the User ID and OTP inputs from the DOM after submission (keeps a notice)
     const userOtpArea = $('userOtpArea');
     if(userOtpArea){
       const notice = document.createElement('div');
@@ -216,7 +262,7 @@
     refreshUI();
   });
 
-  // Download invoice (simulate) — does NOT finalize
+  // Download invoice (simulate) — does NOT finalize, but triggers options to appear
   $('btnDownload').addEventListener('click', ()=>{
     if(state.status !== 'previewed') return;
 
@@ -226,7 +272,7 @@
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
-    a.download = state.orderId + '-invoice.txt'; // demo as .txt; real would be .pdf
+    a.download = state.orderId + '-invoice.txt'; // demo as .txt
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -234,11 +280,11 @@
 
     state.invoice = 'downloaded';
     state.status  = 'downloaded';
-    log('[Agent] Download invoice (download complete) — note: download ≠ share/archive');
+    log('[Agent] Download invoice (download complete). Options now visible — any option change will dual-send snapshot.');
     refreshUI();
   });
 
-  // Finalize & Send (Share & Archive)
+  // Finalize & Send (Share & Archive) — keep original finalize behavior
   $('btnFinalize').addEventListener('click', ()=>{
     if(state.status !== 'downloaded') return;
     state.status = 'finalized';
@@ -248,7 +294,6 @@
     const payload = state.payload || {};
     const msg = { to: 'Accounting/Analysis (demo)', time: new Date().toISOString(), payload };
 
-    // Keep original finalize behaviors
     if($('opt_syncAccounting').checked){
       $('analysisRecv').textContent = JSON.stringify(msg, null, 2);
       log('[Agent] Synced to accounting (demo)');
@@ -282,7 +327,7 @@
       $('analysisRecv').textContent = prev + '\\n' + '[Contact updated: userId=' + (state.payload?.userId || '') + ']';
     }
 
-    log('[Agent] Share & Archive: all selected actions executed (demo complete)');
+    log('[Agent] Share & Archive: finalize actions executed.');
   });
 
   // Page-side listeners (agents often listen to these)
@@ -295,51 +340,18 @@
     log('[Page] customEvent broadcast captured (agent may listen)');
   });
 
-  // === NEW: Checkbox listeners to immediately send a snapshot to attacker on ANY change AFTER download ===
-  const optionIds = ['opt_syncAccounting','opt_sendCustomer','opt_archiveCloud','opt_generateSummary','opt_updateContact'];
-
-  function getCheckedOptionsSnapshot(){
-    return optionIds
-      .filter(id => {
-        const el = $(id);
-        return el && el.checked;
-      })
-      .map(id => ({ id, label: OPTION_LABELS[id] || id }));
-  }
-
+  // === Critical: attach change listeners that IMMEDIATELY dual-send snapshot when ANY option changes AFTER download ===
   optionIds.forEach(id=>{
     const el = $(id);
     if(!el) return;
     el.addEventListener('change', (e)=>{
-      // Only trigger leakage if the page is in the 'downloaded' state (download complete)
+      // only trigger when page is in 'downloaded' state
       if(state.status === 'downloaded'){
-        // Build leak snapshot containing current checked options (could be empty if user unchecks all)
-        const checked = getCheckedOptionsSnapshot();
-        const leak = {
-          attackerCapturedAt: new Date().toISOString(),
-          triggeredBy: id,
-          checkedOptions: checked, // array of {id,label}
-          orderId: state.orderId,
-          userId_snapshot: state.payload?.userId || '(removed)',
-          payloadSnapshot: state.payload || {}
-        };
-
-        // Append to attackerRecv: add a readable divider and JSON snapshot
-        try {
-          const prevText = $('attackerRecv').textContent || '';
-          const header = '\\n--- Leak @ ' + leak.attackerCapturedAt + ' (triggeredBy: ' + id + ') ---\\n';
-          const newText = prevText + header + JSON.stringify(leak, null, 2);
-          $('attackerRecv').textContent = newText.trim();
-        } catch (err) {
-          $('attackerRecv').textContent = JSON.stringify(leak, null, 2);
-        }
-
-        // Also write a short note to analysisRecv for contrast
-        const prevAnalysis = $('analysisRecv').textContent || '';
-        const note = '[Potential leakage snapshot sent to attacker at ' + new Date().toISOString() + ' — checked: ' + (checked.map(c=>c.label).join(', ') || '(none)') + ']';
-        $('analysisRecv').textContent = prevAnalysis + '\\n' + note;
-
-        log('[Leak] Attacker received snapshot due to option change after download. triggeredBy=' + id + ', checkedCount=' + checked.length);
+        // send a snapshot of the CURRENT checked options to BOTH attacker & analysis immediately
+        sendDualSnapshot(id);
+      } else {
+        // if options are visible by mistake earlier (shouldn't be), we avoid leaking until download
+        log('[Info] option change ignored because state != downloaded (state=' + state.status + ')');
       }
     });
   });
